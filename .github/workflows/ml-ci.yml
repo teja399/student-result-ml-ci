@@ -38,5 +38,12 @@ jobs:
       - name: Train student result model
         run: python train_model.py
 
+      - name: Verify ML artifacts
+        run: |
+          test -f student_results.csv
+          test -f student_result_model.pkl
+          test -f metrics.json
+          echo "All ML artifacts verified successfully."
+
       - name: Run automated ML tests
         run: python -m unittest discover -v
