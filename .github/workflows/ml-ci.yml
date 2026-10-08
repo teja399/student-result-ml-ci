@@ -69,3 +69,13 @@ jobs:
           echo "### Automated Tests" >> $GITHUB_STEP_SUMMARY
           echo "- 7 tests executed" >> $GITHUB_STEP_SUMMARY
           echo "- All tests passed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload ML artifacts
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: student-result-ml-artifacts
+          path: |
+            student_results.csv
+            student_result_model.pkl
+            metrics.json
