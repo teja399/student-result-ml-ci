@@ -86,6 +86,16 @@ def train_model():
     print("----------------")
     print("Accuracy:", round(accuracy, 4))
 
+    # ML Quality Gate
+    if accuracy < 0.85:
+        raise ValueError(
+            "QUALITY GATE FAILED: Accuracy is below 0.85"
+        )
+    else:
+        print(
+            "QUALITY GATE PASSED: Accuracy is at least 0.85"
+        )
+
     print("\nConfusion Matrix:")
     print(matrix)
 
