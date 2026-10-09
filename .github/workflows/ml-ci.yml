@@ -1,14 +1,11 @@
-name: Student Result ML CI
+
+name: Seoul Bike ML CI
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
   pull_request:
-    branches:
-      - main
-
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,66 +13,30 @@ permissions:
 
 jobs:
   train-and-test:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Install ML dependencies
-        run: pip install -r requirements.txt
-
-      - name: Train student result model
+      - name: Train ML model
         run: python train_model.py
 
-      - name: Verify ML artifacts
+      - name: Run model quality gate
+        run: python quality_gate.py
+
+      - name: Verify generated files
         run: |
-          test -f student_results.csv
-          test -f student_result_model.pkl
+          test -f seoul_bike_model.pkl
           test -f metrics.json
-          echo "All ML artifacts verified successfully."
-
-      - name: Run automated ML tests
-        run: python -m unittest discover -v
-
-      - name: Generate CI Summary
-        if: always()
-        run: |
-          echo "## Student Result ML CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Model Training" >> $GITHUB_STEP_SUMMARY
-          echo "- Dataset records: 300" >> $GITHUB_STEP_SUMMARY
-          echo "- Training records: 240" >> $GITHUB_STEP_SUMMARY
-          echo "- Testing records: 60" >> $GITHUB_STEP_SUMMARY
-          echo "- Model: Logistic Regression" >> $GITHUB_STEP_SUMMARY
-          echo "- Accuracy: 0.9667" >> $GITHUB_STEP_SUMMARY
-          echo "- Quality Gate: PASSED" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Generated Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- student_results.csv" >> $GITHUB_STEP_SUMMARY
-          echo "- student_result_model.pkl" >> $GITHUB_STEP_SUMMARY
-          echo "- metrics.json" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Automated Tests" >> $GITHUB_STEP_SUMMARY
-          echo "- 7 tests executed" >> $GITHUB_STEP_SUMMARY
-          echo "- All tests passed" >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload ML artifacts
-        if: success()
-        uses: actions/upload-artifact@v6
-        with:
-          name: student-result-ml-artifacts
-          path: |
-            student_results.csv
-            student_result_model.pkl
-            metrics.json
+          echo "Required ML artifacts verified."
