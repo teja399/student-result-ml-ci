@@ -1,121 +1,86 @@
+
 import json
-
-import joblib
-import numpy as np
 import pandas as pd
+import joblib
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+# Load dataset
+df = pd.read_csv("seoul_bike_processed.csv")
 
-def create_dataset():
-    rng = np.random.default_rng(42)
-    number_of_students = 300
+# Remove rows where the target is missing
+df = df.dropna(subset=["Rented Bike Count"])
 
-    data = pd.DataFrame({
-        "attendance": rng.integers(50, 101, number_of_students),
-        "internal_marks": rng.integers(20, 101, number_of_students),
-        "assignment_marks": rng.integers(30, 101, number_of_students),
-        "previous_score": rng.integers(30, 101, number_of_students)
-    })
+# Extract date features
+df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+df["Month"] = df["Date"].dt.month
+df["DayOfWeek"] = df["Date"].dt.dayofweek
+df = df.drop(columns=["Date"])
 
-    data["weighted_score"] = (
-        0.25 * data["attendance"]
-        + 0.35 * data["internal_marks"]
-        + 0.20 * data["assignment_marks"]
-        + 0.20 * data["previous_score"]
-    )
+# Separate features and target
+X = df.drop(columns=["Rented Bike Count"])
+y = df["Rented Bike Count"]
 
-    # 1 = PASS, 0 = FAIL
-    data["result"] = (data["weighted_score"] >= 60).astype(int)
+# Identify column types
+numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
+categorical_features = X.select_dtypes(exclude=["number"]).columns.tolist()
 
-    return data
+# Preprocessing
+numeric_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="median"))
+])
 
+categorical_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("encoder", OneHotEncoder(handle_unknown="ignore"))
+])
 
-def train_model():
-    print("Creating dataset...")
+preprocessor = ColumnTransformer([
+    ("num", numeric_pipeline, numeric_features),
+    ("cat", categorical_pipeline, categorical_features)
+])
 
-    data = create_dataset()
-    data.to_csv("student_results.csv", index=False)
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-    print("Dataset created successfully.")
-    print("Number of records:", len(data))
-
-    features = [
-        "attendance",
-        "internal_marks",
-        "assignment_marks",
-        "previous_score"
-    ]
-
-    X = data[features]
-    y = data["result"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.20,
+# Build and train model
+model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("regressor", RandomForestRegressor(
+        n_estimators=100,
         random_state=42,
-        stratify=y
-    )
+        n_jobs=-1
+    ))
+])
 
-    print("Training records:", len(X_train))
-    print("Testing records :", len(X_test))
+model.fit(X_train, y_train)
 
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("classifier", LogisticRegression(
-            max_iter=1000,
-            random_state=42
-        ))
-    ])
+# Evaluate model
+predictions = model.predict(X_test)
 
-    print("Training model...")
+metrics = {
+    "model": "RandomForestRegressor",
+    "training_samples": int(len(X_train)),
+    "testing_samples": int(len(X_test)),
+    "mae": float(mean_absolute_error(y_test, predictions)),
+    "rmse": float(mean_squared_error(y_test, predictions) ** 0.5),
+    "r2_score": float(r2_score(y_test, predictions))
+}
 
-    model.fit(X_train, y_train)
+# Save trained model
+joblib.dump(model, "seoul_bike_model.pkl")
 
-    predictions = model.predict(X_test)
+# Save metrics
+with open("metrics.json", "w") as file:
+    json.dump(metrics, file, indent=4)
 
-    accuracy = accuracy_score(y_test, predictions)
-    matrix = confusion_matrix(y_test, predictions)
-
-    print("\nModel Evaluation")
-    print("----------------")
-    print("Accuracy:", round(accuracy, 4))
-
-    # ML Quality Gate
-    if accuracy < 0.85:
-        raise ValueError(
-            "QUALITY GATE FAILED: Accuracy is below 0.85"
-        )
-    else:
-        print(
-            "QUALITY GATE PASSED: Accuracy is at least 0.85"
-        )
-
-    print("\nConfusion Matrix:")
-    print(matrix)
-
-    joblib.dump(model, "student_result_model.pkl")
-
-    print("\nModel saved as student_result_model.pkl")
-
-    metrics = {
-        "accuracy": float(accuracy),
-        "training_records": len(X_train),
-        "testing_records": len(X_test)
-    }
-
-    with open("metrics.json", "w") as file:
-        json.dump(metrics, file, indent=4)
-
-    print("Metrics saved as metrics.json")
-
-    return accuracy
-
-
-if __name__ == "__main__":
-    train_model()
+print("Model training completed.")
+print(json.dumps(metrics, indent=4))
