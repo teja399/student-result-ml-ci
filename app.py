@@ -6,7 +6,6 @@ import pandas as pd
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
-
 MODEL_PATH = Path("seoul_bike_model.pkl")
 
 FEATURES = [
@@ -24,20 +23,12 @@ FEATURES = [
     "Functioning Day",
 ]
 
-
-def load_model():
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
-    return joblib.load(MODEL_PATH)
-
-
 @app.get("/")
 def health_check():
     return jsonify({
         "status": "ok",
         "service": "seoul-bike-prediction"
-    }), 200
-
+    })
 
 @app.post("/predict")
 def predict():
@@ -54,27 +45,55 @@ def predict():
         }), 400
 
     try:
-        sample = pd.DataFrame(
-            [{name: data[name] for name in FEATURES}],
-            columns=FEATURES
+        # Build the original raw input columns.
+        sample = pd.DataFrame([{
+            name: data[name] for name in FEATURES
+        }])
+
+        # The training pipeline expects date-derived features
+        # and one-hot-encoded categorical columns.
+        sample["Day"] = int(data.get("Day", 9))
+        sample["Month"] = int(data.get("Month", 10))
+        sample["Year"] = int(data.get("Year", 2018))
+        sample["DayOfWeek"] = int(data.get("DayOfWeek", 1))
+
+        sample["Seasons_Spring"] = int(
+            data["Seasons"] == "Spring"
+        )
+        sample["Seasons_Summer"] = int(
+            data["Seasons"] == "Summer"
+        )
+        sample["Seasons_Winter"] = int(
+            data["Seasons"] == "Winter"
+        )
+        sample["Holiday_No Holiday"] = int(
+            data["Holiday"] == "No Holiday"
+        )
+        sample["Functioning Day_Yes"] = int(
+            data["Functioning Day"] == "Yes"
         )
 
-        model = load_model()
+        model = joblib.load(MODEL_PATH)
+
+        # Keep only the features actually expected by the
+        # fitted model, in the order stored during training.
+        expected = list(model.feature_names_in_)
+        sample = sample.reindex(columns=expected, fill_value=0)
+
         prediction = float(model.predict(sample)[0])
 
         return jsonify({
-            "predicted_rented_bike_count": round(max(0.0, prediction), 2)
+            "predicted_rented_bike_count": round(
+                max(0.0, prediction), 2
+            )
         }), 200
 
-    except FileNotFoundError as error:
-        return jsonify({"error": str(error)}), 500
     except Exception as error:
         app.logger.exception("Prediction failed")
         return jsonify({
             "error": "Prediction failed",
             "details": str(error)
         }), 400
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
