@@ -43,3 +43,14 @@ jobs:
           test -f seoul_bike_model.pkl
           test -f metrics.json
           echo "Required ML artifacts verified."
+
+      - name: Upload validated ML artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: seoul-bike-ml-artifacts
+          path: |
+            seoul_bike_model.pkl
+            metrics.json
+            seoul_bike_processed.csv
+          if-no-files-found: error
+          retention-days: 7
