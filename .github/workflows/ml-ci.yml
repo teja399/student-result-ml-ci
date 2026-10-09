@@ -1,5 +1,5 @@
 
-name: Seoul Bike ML CI
+name: Seoul Bike ML CI-CD
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  train-and-test:
+  train-test-deliver:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,33 +24,37 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
-      - name: Train ML model
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train Seoul Bike model
         run: python train_model.py
 
-      - name: Run model quality gate
+      - name: Check ML quality gate
         run: python quality_gate.py
 
-      - name: Run automated tests
-        run: python -m unittest discover -v
+      - name: Run automated ML tests
+        run: python -m unittest test_ml_pipeline.py -v
 
-      - name: Verify generated files
+      - name: Run prediction application tests
+        run: python -m unittest test_app.py -v
+
+      - name: Prepare release candidate
         run: |
-          test -f seoul_bike_model.pkl
-          test -f metrics.json
-          echo "Required ML artifacts verified."
+          mkdir -p release_candidate
+          cp app.py release_candidate/
+          cp seoul_bike_model.pkl release_candidate/
+          cp metrics.json release_candidate/
+          cp requirements.txt release_candidate/
+          printf "Seoul Bike Prediction Application\nRun: python app.py\nHealth endpoint: GET /\nPrediction endpoint: POST /predict\n" > release_candidate/DEPLOYMENT.txt
 
-      - name: Upload validated ML artifacts
+      - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: seoul-bike-ml-artifacts
-          path: |
-            seoul_bike_model.pkl
-            metrics.json
-            seoul_bike_processed.csv
+          name: seoul-bike-ml-release
+          path: release_candidate/
           if-no-files-found: error
           retention-days: 7
