@@ -1,3 +1,4 @@
+
 import json
 import os
 import unittest
@@ -8,65 +9,38 @@ import pandas as pd
 
 class TestMLPipeline(unittest.TestCase):
 
-    def test_dataset_created(self):
-        self.assertTrue(os.path.exists("student_results.csv"))
-
     def test_model_created(self):
-        self.assertTrue(os.path.exists("student_result_model.pkl"))
+        self.assertTrue(os.path.exists("seoul_bike_model.pkl"))
 
     def test_metrics_created(self):
         self.assertTrue(os.path.exists("metrics.json"))
 
-    def test_accuracy_is_valid(self):
+    def test_metrics_are_valid(self):
         with open("metrics.json", "r") as file:
             metrics = json.load(file)
 
-        accuracy = metrics["accuracy"]
+        self.assertIn("r2_score", metrics)
+        self.assertIn("mae", metrics)
+        self.assertIn("rmse", metrics)
+        self.assertGreaterEqual(metrics["mae"], 0)
+        self.assertGreaterEqual(metrics["rmse"], 0)
 
-        self.assertGreaterEqual(accuracy, 0.0)
-        self.assertLessEqual(accuracy, 1.0)
+    def test_model_can_predict(self):
+        model = joblib.load("seoul_bike_model.pkl")
+        df = pd.read_csv("seoul_bike_processed.csv")
 
-    def test_model_prediction(self):
-        model = joblib.load("student_result_model.pkl")
+        X = df.drop(columns=["Rented Bike Count"])
+        X["Date"] = pd.to_datetime(
+            X["Date"], dayfirst=True, errors="coerce"
+        )
+        X["Month"] = X["Date"].dt.month
+        X["DayOfWeek"] = X["Date"].dt.dayofweek
+        X = X.drop(columns=["Date"])
 
-        sample = pd.DataFrame([{
-            "attendance": 85,
-            "internal_marks": 75,
-            "assignment_marks": 80,
-            "previous_score": 78
-        }])
+        prediction = model.predict(X.head(5))
 
-        prediction = model.predict(sample)[0]
-
-        self.assertIn(int(prediction), [0, 1])
-
-    def test_high_performance_student(self):
-        model = joblib.load("student_result_model.pkl")
-
-        sample = pd.DataFrame([{
-            "attendance": 90,
-            "internal_marks": 85,
-            "assignment_marks": 88,
-            "previous_score": 80
-        }])
-
-        prediction = model.predict(sample)[0]
-
-        self.assertEqual(int(prediction), 1)
-
-    def test_low_performance_student(self):
-        model = joblib.load("student_result_model.pkl")
-
-        sample = pd.DataFrame([{
-            "attendance": 55,
-            "internal_marks": 30,
-            "assignment_marks": 40,
-            "previous_score": 35
-        }])
-
-        prediction = model.predict(sample)[0]
-
-        self.assertEqual(int(prediction), 0)
+        self.assertEqual(len(prediction), 5)
+        self.assertTrue(all(value >= 0 for value in prediction))
 
 
 if __name__ == "__main__":
